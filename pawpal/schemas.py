@@ -7,7 +7,8 @@
 """
 from __future__ import annotations
 
-from datetime import date
+import re
+from datetime import date, time
 from typing import Optional
 
 from pydantic import BaseModel, Field, field_validator
@@ -26,6 +27,34 @@ def _blank_to_none(value):
     if isinstance(value, str) and not value.strip():
         return None
     return value.strip() if isinstance(value, str) else value
+
+
+_HHMM = re.compile(r"^([01]\d|2[0-3]):[0-5]\d$")
+
+
+class ExtractedTimeWindow(BaseModel):
+    """A visit time the resident explicitly stated (Week 2)."""
+
+    start: str = Field(..., description="Start time HH:MM (24h) exactly as stated.")
+    end: Optional[str] = Field(
+        None, description="End time HH:MM (24h) only if the resident gave a range; otherwise null."
+    )
+
+    @field_validator("start", "end")
+    @classmethod
+    def hhmm(cls, value):
+        if value is not None and not _HHMM.match(value):
+            raise ValueError("time must be HH:MM")
+        return value
+
+    def as_times(self, default_minutes: int = 60) -> tuple[time, time]:
+        h, m = map(int, self.start.split(":"))
+        start = time(h, m)
+        if self.end:
+            eh, em = map(int, self.end.split(":"))
+            return start, time(eh, em)
+        total = h * 60 + m + default_minutes
+        return start, time(min(total, 23 * 60 + 59) // 60, min(total, 23 * 60 + 59) % 60)
 
 
 class ExtractedBooking(BaseModel):
@@ -54,6 +83,14 @@ class ExtractedBooking(BaseModel):
     clarification_questions: list[str] = Field(
         default_factory=list,
         description="Short questions for each missing or ambiguous required detail.",
+    )
+    # ---- Week 2 (optional; never guessed)
+    visit_duration_minutes: Optional[int] = Field(
+        None, description="30 or 60, only if the resident states the visit length. Null otherwise."
+    )
+    time_windows: list[ExtractedTimeWindow] = Field(
+        default_factory=list,
+        description="Visit times/ranges the resident explicitly stated, in order through the day. Empty if none stated.",
     )
 
     @field_validator("pet_name", "special_instructions", mode="before")

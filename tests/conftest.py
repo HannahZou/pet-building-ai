@@ -6,6 +6,28 @@ from pawpal.database import init_db, make_engine, session_scope
 from pawpal.models import Pet, Resident
 
 
+@pytest.fixture(autouse=True)
+def _isolated_environment(monkeypatch, tmp_path):
+    """Never touch the real pawpal.db or the real OpenAI API from tests."""
+    from pawpal.database import get_engine
+
+    monkeypatch.setenv("OPENAI_API_KEY", "")
+    monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'default-test.db'}")
+    monkeypatch.delenv("PAWPAL_PRICE_BOOK", raising=False)
+    get_engine.cache_clear()
+    yield
+    get_engine.cache_clear()
+
+
+@pytest.fixture()
+def file_engine(tmp_path):
+    """A migrated SQLite *file* database (needed for locking/concurrency tests)."""
+    eng = make_engine(f"sqlite:///{tmp_path / 'test.db'}")
+    init_db(eng)
+    yield eng
+    eng.dispose()
+
+
 @pytest.fixture()
 def engine():
     eng = make_engine("sqlite://")

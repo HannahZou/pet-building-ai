@@ -4,5 +4,6 @@ openai>=1.50
 pydantic>=2.5
 faker>=24.0
 pytest>=8.0
+alembic>=1.13
 python-dotenv>=1.0
 pandas>=2.0

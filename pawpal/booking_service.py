@@ -1,7 +1,8 @@
 """Booking business logic: validation, ownership checks, persistence.
 
-Week 1 rules: every saved booking is ``pending`` with no caregiver. Nothing here
-logs special instructions or medical notes.
+Every saved booking starts as a ``draft`` (Week 1 called it "pending") with no
+caregiver; Week 2's workflow (``pawpal.workflow``) takes it from there. Nothing
+here logs special instructions or medical notes.
 """
 from __future__ import annotations
 
@@ -144,7 +145,7 @@ def create_booking_draft(
         service_type=draft.service_type,
         special_instructions=draft.special_instructions,
         photo_updates_required=bool(draft.photo_updates_required),
-        status=BookingStatus.PENDING,
+        status=BookingStatus.DRAFT,
     )
     session.add(booking)
     session.flush()
@@ -169,6 +170,15 @@ def list_pets_for_resident(session: Session, resident_id: int) -> list[Pet]:
     )
 
 
+def _caregiver_label(b: Booking) -> str:
+    """Week 1 stored one caregiver per booking; Week 2 assigns caregivers per visit."""
+    if b.caregiver:
+        return b.caregiver.full_name
+    names = sorted({v.caregiver.full_name for v in b.visits
+                    if v.caregiver and v.assignment_status.value != "cancelled"})
+    return ", ".join(names) if names else "Unassigned"
+
+
 def list_booking_rows(session: Session, resident_id: int) -> list[dict[str, Any]]:
     """Plain dicts for display. Excludes medical notes."""
     bookings = session.scalars(
@@ -186,7 +196,7 @@ def list_booking_rows(session: Session, resident_id: int) -> list[dict[str, Any]
             "service_type": b.service_type.value,
             "photo_updates": b.photo_updates_required,
             "status": b.status.value,
-            "caregiver": b.caregiver.full_name if b.caregiver else "Unassigned",
+            "caregiver": _caregiver_label(b),
             "special_instructions": b.special_instructions or "",
             "created_at": b.created_at,
         }

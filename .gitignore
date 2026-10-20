@@ -8,3 +8,6 @@ __pycache__/
 venv/
 .streamlit/secrets.toml
 .DS_Store
+*.db-wal
+*.db-shm
+*.db.bak-*
