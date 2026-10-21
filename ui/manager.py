@@ -18,6 +18,7 @@ from pawpal.workflow import (
     reassign_visits,
 )
 
+from . import manager_care
 from .common import done, note, progress, show_badge, show_flash, table
 
 QUEUE = (S.PENDING_ADMIN_APPROVAL, S.NEEDS_RESCHEDULING, S.PENDING_RESIDENT_APPROVAL, S.QUOTED, S.CONFIRMED)
@@ -45,6 +46,11 @@ def render(managers: list[PropertyManager]) -> None:
                        key="pm_pick")
     manager = by_id[mid]
     actor = Actor.manager(mid)
+    section = st.radio("Section", ["Booking approvals"] + manager_care.SECTIONS, horizontal=True,
+                       label_visibility="collapsed", key="pm_section")
+    if section != "Booking approvals":
+        manager_care.render(section, manager, actor)
+        return
 
     with session_scope() as s:
         rows = booking_rows(s, statuses=QUEUE, building=manager.building_name)

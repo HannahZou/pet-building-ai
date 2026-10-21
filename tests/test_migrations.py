@@ -80,3 +80,32 @@ def test_downgrade_restores_week1_schema(tmp_path):
         assert "visits" not in inspect(conn).get_table_names()
         statuses = dict(conn.exec_driver_sql("SELECT id, status FROM bookings").all())
     assert statuses == {101: "pending", 102: "completed", 103: "cancelled"}
+
+
+def test_week2_database_upgrades_to_week3_with_backfill(tmp_path):
+    """Confirmed Week 2 visits get a 'scheduled' execution row; nothing else changes."""
+    from pawpal.models import ExecutionStatus, Visit, VisitExecution, VisitStatus
+    from tests.week3_world import confirmed_world
+
+    eng = make_engine(f"sqlite:///{tmp_path / 'w2.db'}")
+    init_db(eng)
+    w = confirmed_world(eng)
+    cfg = alembic_config()
+    with eng.begin() as conn:  # back to Week 2 (drops Week 3 tables only)
+        cfg.attributes["connection"] = conn
+        command.downgrade(cfg, "0002_week2")
+    with eng.connect() as conn:
+        assert "visit_executions" not in inspect(conn).get_table_names()
+        before = conn.exec_driver_sql("SELECT id, status, version FROM bookings ORDER BY id").all()
+        visits_before = conn.exec_driver_sql("SELECT id, caregiver_id, assignment_status FROM visits ORDER BY id").all()
+    init_db(eng)  # upgrade again
+    assert current_revision(eng) == head_revision()
+    with eng.connect() as conn:
+        assert conn.exec_driver_sql("SELECT id, status, version FROM bookings ORDER BY id").all() == before
+        assert conn.exec_driver_sql("SELECT id, caregiver_id, assignment_status FROM visits ORDER BY id").all() == visits_before
+        assert conn.exec_driver_sql("SELECT timezone FROM building_settings WHERE building_name='The Meridian'").scalar() == "America/New_York"
+    with session_scope(eng) as s:
+        execs = s.query(VisitExecution).all()
+        confirmed = s.query(Visit).filter(Visit.assignment_status == VisitStatus.CONFIRMED).count()
+        assert len(execs) == confirmed == 4
+        assert {e.execution_status for e in execs} == {ExecutionStatus.SCHEDULED}

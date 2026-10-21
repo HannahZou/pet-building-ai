@@ -4,12 +4,14 @@ In-home pet care booking and operations for luxury apartment buildings.
 
 - **Week 1 – AI booking foundation:** residents, pets, caregivers, an AI booking-request parser, booking drafts and history.
 - **Week 2 – Smart scheduling & pricing:** caregiver availability, visit generation, conflict detection, smart caregiver matching, a deterministic pricing engine, and a two-step approval workflow (resident → property manager).
+- **Week 3 – Care reporting agent:** caregiver check-in/check-out, care activity logging, secure photo uploads, AI daily care reports grounded in visit records with human review, and resident notifications.
 
-Project brief for Week 2: [`docs/week2-spec.md`](docs/week2-spec.md).
+Project briefs: [`docs/week2-spec.md`](docs/week2-spec.md) · [`docs/week3-spec.md`](docs/week3-spec.md) · Roadmap: [`docs/ROADMAP.md`](docs/ROADMAP.md)
 
 ```
-Resident request → Visits generated → Caregivers matched → Conflicts checked → Itemised quote
-   → Resident approves → Property manager approves → Final locked re-check → Confirmed
+Request → Visits → Caregiver matched → Quote → Resident approves → Manager approves → Confirmed
+   → Caregiver checks in → Checklist + photos → Checks out → Daily report drafted (AI, grounded)
+   → Manager reviews & approves → Resident notified and reads the report
 ```
 
 ## Setup
@@ -17,128 +19,169 @@ Resident request → Visits generated → Caregivers matched → Conflicts check
 python -m venv .venv && source .venv/bin/activate   # Python 3.11+
 pip install -r requirements.txt
 cp .env.example .env                                  # add OPENAI_API_KEY (optional)
-python -m pawpal.seed_data                            # Week 1 + Week 2 demo data (safe to rerun)
+python -m pawpal.seed_data                            # Week 1-3 demo data (safe to rerun)
 streamlit run app.py
 ```
-- The schema is managed by **Alembic migrations** and upgraded automatically on start-up.
-  A Week 1 `pawpal.db` is upgraded **in place** (all rows and ids kept); a timestamped backup
-  `pawpal.db.bak-…` is written first. To migrate explicitly: `python -m pawpal.migrate`.
+- The schema is managed by **Alembic migrations** (`0001_week1` → `0002_week2` → `0003_week3`) and
+  upgraded automatically on start-up. Existing databases are upgraded **in place** (all rows and ids
+  kept) after a timestamped backup `pawpal.db.bak-…`. To migrate explicitly: `python -m pawpal.migrate`.
 - `python -m pawpal.seed_data --reset` drops everything and rebuilds the demo data.
-- Without an API key everything still works: use **Fill in manually**, and schedule explanations
-  fall back to a template.
+- Without an API key everything still works: **Fill in manually** for bookings, and template text for
+  schedule explanations and daily reports.
+- Photos are stored in `data/photos/` (git-ignored, outside any public folder).
+
+Optional settings (`.env`): `PAWPAL_DEFAULT_TIMEZONE` (default `America/New_York`),
+`PAWPAL_PHOTO_DIR`, `PAWPAL_MAX_PHOTO_MB` (default 5), `PAWPAL_EMAIL_NOTIFICATIONS` (default true),
+and for real email `SMTP_HOST`, `SMTP_PORT`, `SMTP_USERNAME`, `SMTP_PASSWORD`, `PAWPAL_EMAIL_FROM`.
+Without SMTP settings a **mock email provider** is used and nothing leaves your computer.
 
 ## Tests
 ```bash
 pytest -v
 ```
-70 tests. Each test uses its own temporary SQLite database; OpenAI is always mocked (the key is
-blanked), and `DATABASE_URL` is redirected so the real `pawpal.db` is never touched.
+**107 tests** (22 Week 1 + 48 Week 2 + 37 Week 3). Each test uses its own temporary SQLite database
+and photo folder; OpenAI and email are always mocked; the real `pawpal.db` is never touched.
 
 | Area | File |
 |---|---|
-| Migrations (Week 1 → Week 2 upgrade, schema = models, downgrade) | `tests/test_migrations.py` |
-| Availability, time off, capabilities, permissions | `tests/test_availability.py` |
-| Visit generation, time windows, matching, overlaps, buffers, alternatives | `tests/test_scheduling.py` |
-| Pricing (Decimal, itemisation, versions, recalculation, no invented prices) | `tests/test_pricing.py` |
-| Approval transitions, unauthorised approval, double booking (sequential, concurrent threads, DB trigger) | `tests/test_workflow.py` |
-| AI explanation (mocked, no sensitive data), extraction of time windows, Week 2 seed | `tests/test_ai_and_seed_week2.py` |
+| Migrations (Week 1 → 2 → 3 upgrades with data preserved, backfill, schema = models, downgrade) | `tests/test_migrations.py` |
+| Check-in/out: valid flow, unauthorised, duplicates, invalid transitions, missed visits, cancellation | `tests/test_visit_execution.py` |
+| Activity logging, unrecorded essentials, flags; photo validation, EXIF removal, authorisation | `tests/test_care_logs_and_photos.py` |
+| Daily aggregation, building time zones, missing records, **AI hallucination prevention**, report approval, evaluation metrics | `tests/test_care_reports.py` |
+| Notification idempotency, retries, privacy, provider selection | `tests/test_notifications.py` |
+| Week 3 synthetic data | `tests/test_seed_week3.py` |
+| Week 2: availability, scheduling, pricing, workflow, AI explanation, seed | `tests/test_availability.py`, `test_scheduling.py`, `test_pricing.py`, `test_workflow.py`, `test_ai_and_seed_week2.py` |
 | Week 1 (unchanged) | `tests/test_database.py`, `test_booking_service.py`, `test_extraction.py`, `test_seed.py` |
 
 ## The app (four portals)
-Pick a portal in the sidebar. Demo mode has no login: you choose who you are, but every action is
-still authorised in the service layer (e.g. a resident cannot approve someone else's booking, a
-building manager cannot approve bookings in another building).
+Pick a portal in the sidebar. **Demo mode has no login:** you choose who you are from a dropdown. This
+simulates identity only; every action is still authorised in the service layer (only the assigned
+caregiver can check in, a resident sees only their own pets' records, a manager only their buildings).
 
 | Portal | What you can do |
 |---|---|
-| **Resident** | Describe a trip (AI fills the form), save a draft, choose time windows / visit length / add-ons, see the itemised quote and proposed caregivers, get a plain-language explanation, accept alternative times, approve, reject or cancel, track status. |
-| **Caregiver** | Weekly or daily schedule, set hours for a day, apply a weekly pattern, mark days off, request time off, edit pet types / services / buildings. |
-| **Property Manager** | Queue of bookings awaiting approval or rescheduling, conflict check (blocking vs. warning), ranked caregiver recommendations with reasons, manual reassignment (validated), approve & confirm, reject, mark completed. |
-| **Scheduling & Pricing** | Visit schedule, caregiver availability grid, pricing breakdowns, unresolved conflicts, booking status counts, filterable by building and dates. |
+| **Resident** | New request (AI) · My Bookings (windows, quote, approve) · **Upcoming Visits** with live status · **Care Photos** · **Daily Reports** (approved only) · **Notifications** · History |
+| **Caregiver** | **Today's Visits**: Start Visit, care checklist, notes, flags, photo upload, Complete Visit, actual duration · schedule · availability · time off · skills |
+| **Property Manager** | Booking approvals · **Visit completion** overview, missed visits, end-of-day checks · **Care reports** pending review, approve/reject/regenerate, photo visibility · **Service issues** · **Notifications** status and email delivery |
+| **Scheduling & Pricing** | Visit schedule, availability grid, pricing, conflicts, status |
 
-### Demo walkthrough
-1. **Resident Portal → Allison Hill → New Request** — paste example 1 below, *Generate Booking*, *Save Booking Draft*.
-2. **My Bookings** — choose *Morning* and *Evening* windows, add *Medication*, *Get quote & schedule*
-   → 8 visits, $320.00 quote, proposed caregivers. Click *Explain this schedule*, then *Approve*.
-3. **Property Manager Portal → Olivia Grant** — open the booking, review conflicts and ranking, *Approve & confirm*.
-4. Try the seeded edge cases:
-   - **Teddy** (Hudson Crest, pending admin): the proposed caregiver later took time off → approving moves it to *Needs Rescheduling*; reassign the visits and the resident approves again.
-   - **Louie** (Skyline Court, 22:00 window): nobody works that late → *Needs Rescheduling* with a 21:30 alternative the resident can accept.
-   - **Milo** (draft): no time windows yet → the app asks; it never invents times.
-   - Sign in as **Marcus Lee** (The Meridian only) and notice other buildings are not in the queue.
+### Demo walkthrough (Week 3)
+1. **Caregiver Portal → Brittany Farmer → Today's Visits.** The seed gives Ginger (Hudson Crest) two
+   visits *today* and tomorrow. *Start Visit* → tick the checklist → upload a photo → *Complete Visit*.
+   Do the second visit but record nothing: it goes to *Needs Review* with "Feeding – not recorded".
+   After the last visit of the day the daily report is drafted automatically.
+2. **Property Manager Portal → Olivia Grant → Care reports.** Open Ginger's report: grounded text,
+   factual-consistency score, sources. *Approve & publish* (or reject with a note / regenerate).
+3. **Resident Portal → Monica Herrera →** *Notifications* (visit started/completed, report ready,
+   care issue), *Daily Reports*, *Care Photos*, *Upcoming Visits*.
+4. Seeded history (Oct 12–14, 2026): **Poppy** (all visits done, one report approved), **Oscar**
+   (evening visit *missed*), **Finn** (feeding not completed + flagged observation), **Coco** (checked
+   in, never checked out). In *Visit completion* click **Run end-of-day checks**: Coco moves to
+   *Needs Review* — nothing is ever marked *Completed* just because time passed. Resolve issues under
+   *Service issues*; send pending emails under *Notifications* (mock provider).
+5. Week 2 flows (booking, quote, approvals, Teddy/Louie/Milo edge cases) work as before.
 
 ## Architecture
 | Module | Purpose |
 |---|---|
-| `pawpal/models.py` | SQLAlchemy models + constraints (Week 1 tables, plus visits, availability, time off, capabilities, managers, quotes, events) |
-| `pawpal/migrations/` · `pawpal/migrate.py` | Alembic migrations (`0001_week1` baseline, `0002_week2`) and the auto-upgrade runner with backup |
-| `pawpal/database.py` | Engine (FKs on, WAL, explicit `BEGIN`), `session_scope`, `write_locked_session` (`BEGIN IMMEDIATE`) |
-| `pawpal/availability.py` | Caregiver hours, weekly templates, time off, capabilities, visit lists |
-| `pawpal/scheduling.py` | Time windows, visit generation, conflict detection, caregiver matching, alternatives — **pure deterministic Python** |
-| `pawpal/pricing.py` | Configurable price book, Decimal quotes, versioned quote storage |
-| `pawpal/workflow.py` | State machine, authorisation, approvals, transactional confirmation, audit trail |
-| `pawpal/ai_extraction.py` | OpenAI structured extraction (Week 1, now also stated visit times/length) |
-| `pawpal/ai_explain.py` | AI explanation of a schedule the engine already decided (template fallback) |
-| `pawpal/reports.py` | Read-only queries for the dashboard |
-| `pawpal/booking_service.py` · `schemas.py` | Week 1 validation and draft creation (unchanged behaviour) |
-| `pawpal/seed_data.py` · `seed_scheduling.py` | Reproducible, idempotent demo data (Week 1 + Week 2) |
-| `app.py` · `ui/` | Streamlit router and the four portals (UI only; no business rules) |
+| `pawpal/models.py` | SQLAlchemy models + constraints (Weeks 1–3) |
+| `pawpal/migrations/` · `pawpal/migrate.py` | Alembic migrations and the auto-upgrade runner with backup |
+| `pawpal/database.py` | Engine (FKs on, WAL, explicit `BEGIN`), `session_scope`, `write_locked_session` |
+| `pawpal/availability.py` · `scheduling.py` · `pricing.py` · `workflow.py` | Week 2 scheduling, pricing and approvals |
+| `pawpal/visit_execution.py` | **Week 3** check-in/out, execution states, end-of-day checks |
+| `pawpal/care_logs.py` | **Week 3** activity checklist, essential tasks, review reasons |
+| `pawpal/photo_storage.py` · `photos.py` | **Week 3** validation/sanitising, storage interface (local backend), authorised access |
+| `pawpal/care_reports.py` | **Week 3** daily aggregation, OpenAI structured output, grounding checks, review |
+| `pawpal/notifications.py` | **Week 3** in-app + email (SMTP or mock), outbox, idempotency |
+| `pawpal/evaluation.py` | **Week 3** metrics from the database (`python -m pawpal.evaluation`) |
+| `pawpal/audit.py` · `timeutil.py` | Audit events; UTC timestamps and building time zones |
+| `pawpal/ai_extraction.py` · `ai_explain.py` | Week 1 extraction; Week 2 schedule explanations |
+| `pawpal/seed_data.py` · `seed_scheduling.py` · `seed_care.py` | Reproducible, idempotent demo data |
+| `app.py` · `ui/` | Streamlit router and portals (UI only; no business rules) |
 
-### Booking states
-`Draft → Quoted → Pending Resident Approval → Pending Admin Approval → Confirmed → Completed`,
-with `Needs Rescheduling` (no caregiver / conflict found), `Rejected` and `Cancelled`.
-Week 1's `pending` status is migrated to `draft` (`BookingStatus.PENDING` remains as an alias).
-Every change is written to `booking_events` with the actor's role and id; approvals also store
-`resident_approved_at/by` and `admin_approved_at/by`.
+## Week 3 design
 
-A booking becomes **Confirmed** only when the resident approved, a manager of that building
-approves, every visit has a caregiver, and the final availability/conflict check passes inside the
-confirmation transaction.
+### Visit execution
+`Scheduled → In Progress → Completed | Needs Review`, `Scheduled → Missed | Cancelled`.
+One `visit_executions` row per confirmed visit (created when the booking is confirmed; existing
+confirmed visits were backfilled by migration `0003`).
+- Only the **assigned caregiver** can check in/out; only visits of **confirmed** bookings, and only on
+  the visit's **local date** (building time zone).
+- Timestamps are **server-generated** UTC (`utc_now()`); the UI cannot supply them. Check-out must be
+  strictly after check-in (also a database `CHECK` constraint).
+- Duplicate check-ins/outs are rejected by status checks, a unique row per visit and an optimistic
+  `version` column; check-in/out run in a write-locked transaction.
+- **End-of-day checks** (manager button or `run_daily_checks`): a past day's visit with no check-in →
+  *Missed* (resident notified); checked in but no check-out → *Needs Review*. **Nothing is ever marked
+  Completed because time passed.**
+- Every change is written to `audit_events` (ids and statuses only).
 
-### Scheduling rules
-- A visit is generated for every day × visit-per-day (Nov 6–9, twice a day → 8 visits) inside the
-  resident's chosen **time window**. If windows are missing the app asks for them; the AI only
-  fills windows when the resident states explicit clock times.
-- A caregiver qualifies if active, cares for the species, offers the service and covers the
-  building. They are available if a working block contains the whole visit, they are not on
-  time off, and nothing they hold overlaps once a **travel buffer** is added (10 min in the same
-  building, 30 min between buildings).
-- Ranking (MVP, minimise travel/cost): most visits of this booking they can cover → most visits
-  already in the same building on those dates → lightest load → id. Each visit gets the best-ranked
-  available caregiver at the earliest start in its window (15-minute steps).
-- No caregiver → *Needs Rescheduling* with the nearest free times on the same day as alternatives
-  for the resident to accept.
-- The LLM never decides availability, assignments or prices; it only extracts the request and
-  explains results, and never receives medical notes, special instructions or prices.
+### Activity logging
+Activities: Feeding, Fresh Water, Dog Walking, Litter Box Cleaning, Playtime, Wellness Observation, Other;
+statuses Completed / Not completed / Skipped (caregiver) and **Not recorded** (system). *Essential*
+tasks depend on the service and species (e.g. feeding → feeding + fresh water; full care for a cat
+adds litter box). At check-out every essential without a record is **stored as Not recorded** —
+nothing is assumed. Not completed/skipped need a factual note. Any essential not completed or any
+caregiver **flag** sends the visit to *Needs Review*.
 
-### Pricing
-| Service | Price |
-|---|---|
-| Cat visit — 30 min | $30 |
-| Dog visit — 30 min | $35 |
-| Upgrade to 60 min | +$15 per visit |
-| Additional pet-care service | +$10 per service per visit |
+### Photos
+JPG/JPEG/PNG only; size limit `PAWPAL_MAX_PHOTO_MB`; the bytes must decode as the claimed format
+(a renamed text file or a PNG called `.jpg` is rejected); pixel limit against decompression bombs.
+Images are **re-encoded from pixels**, which removes EXIF (GPS, device, time) and text metadata.
+Random file names, stored under `data/photos/` behind a `PhotoStorage` interface (`save/read/delete`
+with opaque keys — a cloud backend only needs those three methods). Access: the booking's resident
+(if visible), the assigned caregiver, and managers of the building; pages receive image bytes, never
+paths. Managers can hide a photo from the resident. A photo is never treated as proof of an activity.
 
-`Total = Σ visit prices + additional service fees`, computed with `Decimal`, stored in integer cents
-with the price-book version (`2026-10-demo-v1`). Changing duration, add-ons or windows creates a
-new quote (old ones kept, marked not current) and clears earlier approvals. Species without a
-published rate (e.g. rabbits) are not priced — the resident is asked to contact the concierge.
-Override rates with `PAWPAL_PRICE_BOOK=/path/prices.json` (same shape as `DEMO_PRICE_BOOK.to_dict()`).
+### AI daily care reports
+1. **Facts** (`build_daily_facts`): all visits of one booking on one local date, with check-in/out,
+   activity logs, caregiver notes and photo captions. Pet profile = name, species, breed, age —
+   **medical notes are never sent to the model**.
+2. **AI narrative**: OpenAI with a Pydantic structured-output schema (`AICareReport`), temperature 0,
+   strict prompt (no invented activities, times, medical observations or photo inferences; state
+   "not recorded"; never hide missed items).
+3. **Grounding check** (`evaluate_report`): every completed/incomplete activity, photo reference,
+   observation, clock time, activity mention ("fed", "walked"…) and health term in the AI output is
+   checked against the records, and every missed item must be surfaced. **Any unsupported claim or
+   omission → the AI text is discarded** and a deterministic template narrative is used
+   (`template_fallback`, flagged for the reviewer).
+4. The stored lists (completed/incomplete activities, observations, photos, issues) always come from
+   the records. Stored with the report: text, structured output, generation time, model id, review
+   status, evaluation, and source record ids.
+5. **Human review**: reports start *Pending review*; a manager of the building approves (→ resident
+   notified) or rejects with a note (→ regenerate). Approved reports are immutable. Reports with
+   missed visits, incomplete essentials or flags are marked *needs attention*.
 
-### Double-booking protection (local MVP on SQLite)
-1. **Matching** avoids anything a caregiver already holds (confirmed visits and other pending proposals).
-2. **Final check**: confirmation runs in `write_locked_session`, which starts with `BEGIN IMMEDIATE`,
-   so only one confirmation can run at a time; it re-validates every visit against the database.
-3. **Database triggers** (`trg_visits_no_overlap_*`) abort any insert/update that would give a caregiver
-   two overlapping *confirmed* visits, even if application code were wrong.
-4. **Optimistic locking** (`bookings.version`) rejects writes based on a stale copy of a booking.
+### Notifications
+Visit started · Visit completed · Daily report available (only after approval) · Missed visit ·
+Care issue (sent with an approved report that needs attention). Written in the **same transaction**
+as the event (outbox), each with a unique **idempotency key** (`type:scope:channel`), so retries never
+duplicate. Emails are delivered afterwards (`deliver_pending`), retried up to 3 times; sent emails are
+never resent. **Privacy:** messages carry the pet's name and a time at most — no notes, observations,
+medical details or addresses; emails just point to the app.
 
-**Limitations:** SQLite allows one writer at a time (others wait up to 15 s); the trigger checks exact
-overlap, while travel buffers are enforced in Python; times are local building time without time zones;
-availability is stored per date (no recurring rules engine). WAL mode lets the Streamlit sessions read
-while one writes, but this is a single-machine setup.
+### Evaluation (`python -m pawpal.evaluation`)
+Computed from stored records, never hard-coded: report factual consistency and unsupported-claim
+rate (for the AI draft and for the published report), missing-activity detection, email success
+rate, visit completion rate. On the seeded demo data (template narratives, no API key) the command
+printed: 6 reports, published factual consistency **1.0**, unsupported claim rate **0.0**, missing-item
+detection **1.0**, visit completion rate **0.889** (8 of 9 visits with a known outcome; 1 missed), AI
+metrics **n/a** (no AI reports generated yet). AI metrics appear once reports are generated with a
+real key; the hallucination tests use a mocked model that invents a feeding, a time, a photo and
+health claims — all are detected and discarded.
 
-**Before production, move to PostgreSQL** and enforce the rule in the database:
+## Week 2 reference
+**Booking states:** `Draft → Quoted → Pending Resident Approval → Pending Admin Approval → Confirmed →
+Completed`, plus `Needs Rescheduling`, `Rejected`, `Cancelled`; every change in `booking_events`.
+**Scheduling:** visits per day × window; qualified caregivers (species, service, building), working
+hours, time off, travel buffers (10 min same building / 30 min otherwise); ranking by coverage, then
+same-building visits, then load. **Pricing:** cat $30 / dog $35 per 30 min, +$15 for 60 min, +$10 per
+add-on per visit; `Decimal`, integer cents, versioned quotes. **Double booking:** matching avoids held
+time; confirmation in `BEGIN IMMEDIATE`; SQLite triggers reject overlapping confirmed visits;
+optimistic locking.
+
+## Production notes
+Move to **PostgreSQL** before production and enforce no-overlap in the database:
 ```sql
 CREATE EXTENSION IF NOT EXISTS btree_gist;
 ALTER TABLE visits ADD CONSTRAINT no_overlapping_confirmed_visits
@@ -147,8 +190,9 @@ ALTER TABLE visits ADD CONSTRAINT no_overlapping_confirmed_visits
     tsrange(visit_date + start_time, visit_date + end_time) WITH &&
   ) WHERE (assignment_status = 'confirmed');
 ```
-and confirm with `SELECT … FOR UPDATE` on the booking and caregiver rows (or `SERIALIZABLE`
-isolation with retry). Add real authentication, time zones per building, and notifications.
+Use `SELECT … FOR UPDATE` (or `SERIALIZABLE` with retry) for confirmations and check-ins, a cloud
+object store behind `PhotoStorage` with signed URLs, a job scheduler for end-of-day checks and email
+delivery, and real authentication.
 
 ## Example requests
 1. `I'm traveling from November 6 to November 9, 2026. My cat Luna needs feeding twice a day and I'd like a photo after every visit.`
@@ -158,10 +202,22 @@ isolation with retry). Add real authentication, time zones per building, and not
 5. *(invalid range, should be blocked)* `Care from November 9 to November 6, 2026, feeding once a day, photos yes.`
 
 ## Privacy
-Only the request text and pet names go to OpenAI for extraction; explanations receive first names,
-dates, counts and reasons only. Medical notes and special instructions are never sent, shown in
-history tables, or logged.
+OpenAI receives only: the booking request text and pet names (extraction); first names, dates, counts
+and reasons (schedule explanations); and the day's visit records — times, activity statuses, caregiver
+notes, photo captions, pet name/species/breed/age (care reports). Medical notes are never sent to any
+model, never put in notifications or logs, and are hidden from property managers unless their account
+has `can_view_medical_notes`. The assigned caregiver sees the pet's medical notes on the visit card
+because they need them to give care. Audit events store ids and statuses only.
 
 ## Known limitations
-- The Streamlit UI was smoke-tested headlessly; please click through it once with a real browser and API key.
-- No authentication (demo pickers), payments or notifications yet.
+- The Streamlit UI was tested headlessly (scripted runs of every portal); please click through it once
+  in a real browser, and try a report with a real OpenAI key.
+- **No authentication**: identity is chosen from dropdowns (clearly labelled demo mode).
+- End-of-day checks and email delivery run when a manager clicks the buttons (no background scheduler).
+- Grounding checks are rule-based (keywords, times, references); unusual phrasing could slip past or be
+  flagged conservatively — the human review step remains required.
+- EXIF removal re-encodes images (small quality loss for JPEG); HEIC and other formats are not accepted.
+- Missed-visit detection uses the end of the visit's local day; there is no live "late arrival" alerting
+  beyond the *Overdue* label in the manager overview.
+- SMTP sending is implemented but untested against a real server here; the mock provider is the default.
+- SQLite single-writer limits apply (see Production notes).

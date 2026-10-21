@@ -10,7 +10,6 @@ from pawpal.database import session_scope
 from pawpal.models import Booking, BookingStatus as S, CaregiverAvailability, PropertyManager
 from pawpal.schemas import ExtractedBooking, ExtractedTimeWindow
 from pawpal.scheduling import Window, generate_visits, recommend_schedule, set_time_windows
-from pawpal.seed_data import seed_all
 from tests import factories as f
 from tests.conftest import FakeOpenAI
 
@@ -77,9 +76,16 @@ def test_extraction_returns_stated_time_windows():
         ExtractedTimeWindow(start="8am")
 
 
+def _seed_weeks_1_and_2(engine):
+    from pawpal.seed_data import seed_database
+    from pawpal.seed_scheduling import seed_scheduling_data
+
+    return {"week1": seed_database(engine), "week2": seed_scheduling_data(engine)}
+
+
 def test_week2_seed_is_reproducible_and_idempotent(file_engine):
-    first = seed_all(file_engine)
-    second = seed_all(file_engine)
+    first = _seed_weeks_1_and_2(file_engine)
+    second = _seed_weeks_1_and_2(file_engine)
     assert first["week2"]["bookings"] == 13 and first["week2"]["managers"] == 3
     assert all(v == 0 for v in second["week1"].values()) and all(v == 0 for v in second["week2"].values())
     with session_scope(file_engine) as s:

@@ -269,6 +269,10 @@ class PropertyManager(Base):
     full_name: Mapped[str] = mapped_column(String(120), nullable=False)
     email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
     building_name: Mapped[str | None] = mapped_column(String(120))
+    # Week 3: medical notes are hidden from managers unless explicitly authorised.
+    can_view_medical_notes: Mapped[bool] = mapped_column(
+        Boolean, nullable=False, default=False, server_default="0"
+    )
 
     def manages(self, building_name: str) -> bool:
         return self.building_name is None or self.building_name == building_name
@@ -422,3 +426,221 @@ class BookingEvent(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
 
     booking: Mapped["Booking"] = relationship(back_populates="events")
+
+
+
+# =========================================================== Week 3 models
+class ExecutionStatus(str, enum.Enum):
+    SCHEDULED = "scheduled"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+    MISSED = "missed"
+    CANCELLED = "cancelled"
+    NEEDS_REVIEW = "needs_review"
+
+
+class ActivityType(str, enum.Enum):
+    FEEDING = "feeding"
+    FRESH_WATER = "fresh_water"
+    DOG_WALKING = "dog_walking"
+    LITTER_BOX = "litter_box"
+    PLAYTIME = "playtime"
+    WELLNESS_OBSERVATION = "wellness_observation"
+    OTHER = "other"
+
+
+class CompletionStatus(str, enum.Enum):
+    COMPLETED = "completed"
+    NOT_COMPLETED = "not_completed"   # attempted / could not be done
+    SKIPPED = "skipped"               # deliberately not done (e.g. resident asked)
+    NOT_RECORDED = "not_recorded"     # caregiver left without recording it (set at check-out)
+
+
+class PhotoVisibility(str, enum.Enum):
+    VISIBLE = "visible"   # resident, assigned caregiver and managers
+    HIDDEN = "hidden"     # hidden from the resident by a manager
+
+
+class ReportStatus(str, enum.Enum):
+    PENDING_REVIEW = "pending_review"
+    APPROVED = "approved"
+    REJECTED = "rejected"
+
+
+class NotificationType(str, enum.Enum):
+    VISIT_STARTED = "visit_started"
+    VISIT_COMPLETED = "visit_completed"
+    DAILY_REPORT_AVAILABLE = "daily_report_available"
+    MISSED_VISIT = "missed_visit"
+    CARE_ISSUE = "care_issue"
+
+
+class NotificationChannel(str, enum.Enum):
+    IN_APP = "in_app"
+    EMAIL = "email"
+
+
+class DeliveryStatus(str, enum.Enum):
+    PENDING = "pending"
+    SENT = "sent"
+    FAILED = "failed"
+
+
+class BuildingSetting(Base):
+    """Per-building settings; the time zone is used to group visits into local days."""
+
+    __tablename__ = "building_settings"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    building_name: Mapped[str] = mapped_column(String(120), nullable=False, unique=True)
+    timezone: Mapped[str] = mapped_column(String(64), nullable=False)
+
+
+class VisitExecution(Base):
+    """What actually happened at a scheduled visit (one row per visit)."""
+
+    __tablename__ = "visit_executions"
+    __table_args__ = (
+        CheckConstraint(
+            "actual_check_out IS NULL OR (actual_check_in IS NOT NULL AND actual_check_out > actual_check_in)",
+            name="ck_execution_checkout_after_checkin",
+        ),
+    )
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scheduled_visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), nullable=False, unique=True)
+    caregiver_id: Mapped[int] = mapped_column(ForeignKey("caregivers.id"), nullable=False, index=True)
+    actual_check_in: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    actual_check_out: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    execution_status: Mapped[ExecutionStatus] = mapped_column(
+        _enum_col(ExecutionStatus, "execution_status"), nullable=False, default=ExecutionStatus.SCHEDULED
+    )
+    review_reasons: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("property_managers.id"))
+    review_note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime(timezone=True), nullable=False, default=_utcnow, onupdate=_utcnow
+    )
+    version: Mapped[int] = mapped_column(Integer, nullable=False, default=1, server_default="1")
+
+    __mapper_args__ = {"version_id_col": version}
+
+    visit: Mapped["Visit"] = relationship()
+    caregiver: Mapped["Caregiver"] = relationship()
+
+    @property
+    def duration_minutes(self) -> int | None:
+        if self.actual_check_in and self.actual_check_out:
+            def utc(dt: datetime) -> datetime:  # SQLite returns naive UTC
+                return dt.replace(tzinfo=timezone.utc) if dt.tzinfo is None else dt.astimezone(timezone.utc)
+            return int((utc(self.actual_check_out) - utc(self.actual_check_in)).total_seconds() // 60)
+        return None
+
+
+class CareActivityLog(Base):
+    __tablename__ = "care_activity_logs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scheduled_visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), nullable=False, index=True)
+    caregiver_id: Mapped[int] = mapped_column(ForeignKey("caregivers.id"), nullable=False)
+    activity_type: Mapped[ActivityType] = mapped_column(_enum_col(ActivityType, "activity_type"), nullable=False)
+    completion_status: Mapped[CompletionStatus] = mapped_column(
+        _enum_col(CompletionStatus, "completion_status"), nullable=False
+    )
+    notes: Mapped[str | None] = mapped_column(Text)
+    flagged: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
+    recorded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    visit: Mapped["Visit"] = relationship()
+
+
+class PetCarePhoto(Base):
+    __tablename__ = "pet_care_photos"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    scheduled_visit_id: Mapped[int] = mapped_column(ForeignKey("visits.id"), nullable=False, index=True)
+    caregiver_id: Mapped[int] = mapped_column(ForeignKey("caregivers.id"), nullable=False)
+    file_path: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)  # storage key, never shown
+    content_type: Mapped[str] = mapped_column(String(32), nullable=False)
+    size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)
+    width: Mapped[int] = mapped_column(Integer, nullable=False)
+    height: Mapped[int] = mapped_column(Integer, nullable=False)
+    caption: Mapped[str | None] = mapped_column(String(300))
+    visibility_status: Mapped[PhotoVisibility] = mapped_column(
+        _enum_col(PhotoVisibility, "photo_visibility"), nullable=False, default=PhotoVisibility.VISIBLE
+    )
+    uploaded_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+    visit: Mapped["Visit"] = relationship()
+
+
+class DailyCareReport(Base):
+    """One report per booking per local calendar day. AI text is published only after approval."""
+
+    __tablename__ = "daily_care_reports"
+    __table_args__ = (UniqueConstraint("booking_id", "report_date", name="uq_report_booking_date"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    booking_id: Mapped[int] = mapped_column(ForeignKey("bookings.id"), nullable=False, index=True)
+    pet_id: Mapped[int] = mapped_column(ForeignKey("pets.id"), nullable=False, index=True)
+    report_date: Mapped[date] = mapped_column(Date, nullable=False)
+    report_text: Mapped[str] = mapped_column(Text, nullable=False)
+    structured_output: Mapped[dict] = mapped_column(JSON, nullable=False)
+    source_refs: Mapped[dict] = mapped_column(JSON, nullable=False)
+    evaluation: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    model_identifier: Mapped[str] = mapped_column(String(80), nullable=False)
+    generated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    needs_attention: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False)
+    review_status: Mapped[ReportStatus] = mapped_column(
+        _enum_col(ReportStatus, "report_status"), nullable=False, default=ReportStatus.PENDING_REVIEW
+    )
+    reviewed_by: Mapped[int | None] = mapped_column(ForeignKey("property_managers.id"))
+    reviewed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    review_notes: Mapped[str | None] = mapped_column(Text)
+    generation_count: Mapped[int] = mapped_column(Integer, nullable=False, default=1)
+
+    booking: Mapped["Booking"] = relationship()
+    pet: Mapped["Pet"] = relationship()
+
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    resident_id: Mapped[int] = mapped_column(ForeignKey("residents.id"), nullable=False, index=True)
+    booking_id: Mapped[int | None] = mapped_column(ForeignKey("bookings.id"), index=True)
+    notification_type: Mapped[NotificationType] = mapped_column(
+        _enum_col(NotificationType, "notification_type"), nullable=False
+    )
+    channel: Mapped[NotificationChannel] = mapped_column(
+        _enum_col(NotificationChannel, "notification_channel"), nullable=False
+    )
+    message: Mapped[str] = mapped_column(Text, nullable=False)
+    idempotency_key: Mapped[str] = mapped_column(String(160), nullable=False, unique=True)
+    delivery_status: Mapped[DeliveryStatus] = mapped_column(
+        _enum_col(DeliveryStatus, "delivery_status"), nullable=False, default=DeliveryStatus.PENDING
+    )
+    provider: Mapped[str | None] = mapped_column(String(40))
+    attempts: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    last_error: Mapped[str | None] = mapped_column(String(300))
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+    sent_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+    read_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
+
+
+class AuditEvent(Base):
+    """Generic audit trail. ``details`` holds ids and statuses only - no notes or medical data."""
+
+    __tablename__ = "audit_events"
+    __table_args__ = (Index("ix_audit_entity", "entity_type", "entity_id"),)
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    entity_type: Mapped[str] = mapped_column(String(40), nullable=False)
+    entity_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    action: Mapped[str] = mapped_column(String(60), nullable=False)
+    actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
+    actor_id: Mapped[int | None] = mapped_column(Integer)
+    details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)

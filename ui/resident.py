@@ -46,6 +46,7 @@ from pawpal.workflow import (
     resident_reject,
 )
 
+from . import resident_care
 from .common import done, note, progress, show_badge, show_flash, table
 
 EXAMPLE = (
@@ -421,11 +422,23 @@ def render(resident: Resident) -> None:
     goto = st.session_state.pop("_goto_resident_tab", None)
     if goto:
         st.session_state["resident_tab"] = goto  # set before the widget is created
-    tab = st.radio("Resident portal", ["New Request", "My Bookings", "History"], horizontal=True,
-                   label_visibility="collapsed", key="resident_tab")
+    unread = resident_care.unread_count(resident)
+    bell = f"Notifications ({unread})" if unread else "Notifications"
+    tabs = ["New Request", "My Bookings", "Upcoming Visits", "Care Photos", "Daily Reports", bell, "History"]
+    if st.session_state.get("resident_tab", "").startswith("Notifications"):
+        st.session_state["resident_tab"] = bell  # label changes with the unread count
+    tab = st.radio("Resident portal", tabs, horizontal=True, label_visibility="collapsed", key="resident_tab")
     if tab == "New Request":
         new_booking_page(resident)
     elif tab == "My Bookings":
         my_bookings_page(resident)
+    elif tab == "Upcoming Visits":
+        resident_care.upcoming_visits(resident)
+    elif tab == "Care Photos":
+        resident_care.care_photos(resident)
+    elif tab == "Daily Reports":
+        resident_care.daily_reports(resident)
+    elif tab.startswith("Notifications"):
+        resident_care.notification_center(resident)
     else:
         history_page(resident)

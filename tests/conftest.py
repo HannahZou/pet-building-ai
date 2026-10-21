@@ -14,6 +14,10 @@ def _isolated_environment(monkeypatch, tmp_path):
     monkeypatch.setenv("OPENAI_API_KEY", "")
     monkeypatch.setenv("DATABASE_URL", f"sqlite:///{tmp_path / 'default-test.db'}")
     monkeypatch.delenv("PAWPAL_PRICE_BOOK", raising=False)
+    monkeypatch.setenv("PAWPAL_PHOTO_DIR", str(tmp_path / "photos"))
+    monkeypatch.setenv("PAWPAL_DEFAULT_TIMEZONE", "America/New_York")
+    for var in ("SMTP_HOST", "PAWPAL_EMAIL_FROM", "SMTP_USERNAME", "SMTP_PASSWORD"):
+        monkeypatch.delenv(var, raising=False)
     get_engine.cache_clear()
     yield
     get_engine.cache_clear()

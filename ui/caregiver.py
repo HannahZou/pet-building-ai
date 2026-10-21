@@ -24,6 +24,7 @@ from pawpal.models import Caregiver, ServiceType
 from pawpal.schemas import SERVICE_LABELS
 from pawpal.workflow import STATUS_LABELS
 
+from . import caregiver_visits as visits_page
 from .common import done, show_flash, table
 
 WEEKDAYS = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
@@ -185,9 +186,11 @@ def render(caregivers: list[Caregiver], buildings: list[str]) -> None:
         f"Services: {', '.join(sorted(SERVICE_LABELS[x].split(' (')[0] for x in cg.service_set)) or '—'} · "
         f"Buildings: {', '.join(sorted(cg.building_set)) or '—'}"
     )
-    tab = st.radio("Caregiver portal", ["My schedule", "Availability", "Time off", "Skills & buildings"],
+    tab = st.radio("Caregiver portal", ["Today's Visits", "My schedule", "Availability", "Time off", "Skills & buildings"],
                    horizontal=True, label_visibility="collapsed", key="cg_tab")
-    if tab == "My schedule":
+    if tab == "Today's Visits":
+        visits_page.render(cg)
+    elif tab == "My schedule":
         schedule_tab(cg)
     elif tab == "Availability":
         availability_tab(cg, actor)

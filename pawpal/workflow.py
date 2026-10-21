@@ -37,6 +37,7 @@ from .models import (
     VisitStatus,
 )
 from .pricing import PriceBook, PricingError, active_price_book, quote_for_booking, save_quote
+from .visit_execution import cancel_scheduled_executions, create_scheduled_executions
 from .scheduling import (
     Conflict,
     Issue,
@@ -141,9 +142,16 @@ def _clear_approvals(booking: Booking) -> None:
 
 
 def _release_visits(booking: Booking) -> None:
+    from .models import ExecutionStatus, VisitExecution
+
+    session = Session.object_session(booking)
     for v in booking.visits:
-        if v.assignment_status != VisitStatus.COMPLETED:
-            v.assignment_status = VisitStatus.CANCELLED
+        if v.assignment_status == VisitStatus.COMPLETED:
+            continue
+        ex = session.scalar(select(VisitExecution).where(VisitExecution.scheduled_visit_id == v.id)) if session else None
+        if ex is not None and ex.execution_status not in (ExecutionStatus.SCHEDULED, ExecutionStatus.CANCELLED):
+            continue  # already started/done: keep the record of what happened
+        v.assignment_status = VisitStatus.CANCELLED
 
 
 # ---------------------------------------------------- quote + schedule step
@@ -262,6 +270,7 @@ def cancel_booking(session: Session, booking_id: int, actor: Actor, reason: str 
     _require_resident_or_manager(session, booking, actor)
     if booking.status in TERMINAL:
         raise InvalidTransition(f"This booking is already {STATUS_LABELS[booking.status]}.")
+    cancel_scheduled_executions(session, booking, actor)  # Week 3: not-yet-started visits
     _release_visits(booking)
     transition(session, booking, S.CANCELLED, actor, reason or "Cancelled.")
     return booking
@@ -363,6 +372,7 @@ def confirm_booking(booking_id: int, actor: Actor, engine: Engine | None = None)
                 v.assignment_status = VisitStatus.CONFIRMED
             s.flush()  # DB trigger re-checks overlaps here
             transition(s, booking, S.CONFIRMED, actor, "Assignments approved; all checks passed.")
+            create_scheduled_executions(s, booking)  # Week 3: visits ready for check-in
             return ConfirmResult(True, S.CONFIRMED, "Booking confirmed.")
     except IntegrityError as exc:
         if "caregiver_double_booked" not in str(exc):

@@ -124,3 +124,68 @@ def unresolved_conflicts(session: Session, building: str | None = None) -> list[
                 "Details": c.message,
             })
     return out
+
+
+# ================================================================ Week 3
+def execution_rows(session: Session, start: date, end: date, building: str | None = None, now=None) -> list[dict]:
+    """Every confirmed visit in range with its execution status (local times)."""
+    from .models import Booking as B
+    from .timeutil import building_tz, fmt_local
+    from .visit_execution import LABELS, get_execution, is_overdue
+
+    q = (
+        select(Visit, B, Resident)
+        .join(B, Visit.booking_id == B.id)
+        .join(Resident, B.resident_id == Resident.id)
+        .where(Visit.visit_date.between(start, end),
+               Visit.assignment_status.in_([VisitStatus.CONFIRMED, VisitStatus.COMPLETED]))
+        .order_by(Visit.visit_date, Visit.start_time)
+    )
+    if building:
+        q = q.where(Resident.building_name == building)
+    rows = []
+    for v, b, r in session.execute(q).all():
+        ex = get_execution(session, v.id)
+        tz = building_tz(session, r.building_name)
+        status = LABELS[ex.execution_status] if ex else "Scheduled"
+        if is_overdue(session, v, ex, now):
+            status = "Overdue (not started)"
+        rows.append({
+            "Visit": v.id, "Date": v.visit_date, "Scheduled": f"{v.start_time:%H:%M}–{v.end_time:%H:%M}",
+            "Building": r.building_name, "Pet": b.pet.name,
+            "Caregiver": v.caregiver.full_name if v.caregiver else "—",
+            "Status": status,
+            "Check-in": fmt_local(ex.actual_check_in, tz) if ex else None,
+            "Check-out": fmt_local(ex.actual_check_out, tz) if ex else None,
+            "Minutes": ex.duration_minutes if ex else None,
+            "Booking": b.id,
+        })
+    for row in rows:  # Arrow-friendly: no mixed None/int columns
+        row["Check-in"] = row["Check-in"] or "—"
+        row["Check-out"] = row["Check-out"] or "—"
+        row["Minutes"] = "" if row["Minutes"] is None else str(row["Minutes"])
+    return rows
+
+
+def open_visit_issues(session: Session, building: str | None = None) -> list[dict]:
+    """Missed / Needs Review visits a manager has not resolved yet."""
+    from .models import Booking as B, ExecutionStatus, VisitExecution
+
+    q = (
+        select(VisitExecution, Visit, B, Resident)
+        .join(Visit, VisitExecution.scheduled_visit_id == Visit.id)
+        .join(B, Visit.booking_id == B.id)
+        .join(Resident, B.resident_id == Resident.id)
+        .where(VisitExecution.execution_status.in_([ExecutionStatus.MISSED, ExecutionStatus.NEEDS_REVIEW]),
+               VisitExecution.reviewed_at.is_(None))
+        .order_by(Visit.visit_date.desc(), Visit.start_time)
+    )
+    if building:
+        q = q.where(Resident.building_name == building)
+    return [
+        {"Visit": v.id, "Date": v.visit_date, "Time": f"{v.start_time:%H:%M}", "Building": r.building_name,
+         "Pet": b.pet.name, "Caregiver": v.caregiver.full_name if v.caregiver else "—",
+         "Status": ex.execution_status.value.replace("_", " ").title(),
+         "Reasons": "; ".join(ex.review_reasons or []) or "—", "Booking": b.id}
+        for ex, v, b, r in session.execute(q).all()
+    ]

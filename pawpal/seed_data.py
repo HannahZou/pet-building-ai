@@ -3,8 +3,9 @@
 Run:  python -m pawpal.seed_data            (safe to rerun - no duplicates)
       python -m pawpal.seed_data --reset    (drop and recreate all tables first)
 
-Seeds Week 1 data (residents, pets, caregivers, booking history) and then the
-Week 2 scheduling data (``pawpal.seed_scheduling``).
+Seeds Week 1 data (residents, pets, caregivers, booking history), then the
+Week 2 scheduling data (``pawpal.seed_scheduling``) and the Week 3 care-reporting
+data (``pawpal.seed_care``).
 
 All people, emails (example.test), phones and pets are fictional.
 """
@@ -211,10 +212,11 @@ def seed_database(engine: Engine | None = None, seed: int = SEED) -> dict[str, i
 
 
 def seed_all(engine: Engine | None = None) -> dict[str, dict[str, int]]:
-    """Week 1 + Week 2 demo data (idempotent)."""
+    """Week 1 + Week 2 + Week 3 demo data (idempotent)."""
+    from .seed_care import seed_care_data
     from .seed_scheduling import seed_scheduling_data
 
-    return {"week1": seed_database(engine), "week2": seed_scheduling_data(engine)}
+    return {"week1": seed_database(engine), "week2": seed_scheduling_data(engine), "week3": seed_care_data(engine)}
 
 
 def reset_database(engine: Engine) -> None:
@@ -236,6 +238,7 @@ def main() -> None:
     result = seed_all(engine)
     print("Week 1 created:", result["week1"])
     print("Week 2 created:", result["week2"])
+    print("Week 3 created:", result["week3"])
 
 
 if __name__ == "__main__":
