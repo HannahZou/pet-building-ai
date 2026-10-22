@@ -1,0 +1,238 @@
+{
+  "kind": "booking_extraction",
+  "system": "rules-baseline-v1",
+  "created_at": "2026-10-21T03:45:03+00:00",
+  "dataset": {
+    "version": "booking_requests_v1",
+    "path": "evaluation/datasets/booking_requests_v1.jsonl",
+    "sha256": "7efc4bc761049e7abc9d8e43fe481ce28573d662234c22d7ebe7da38ec8cc019",
+    "size": 103,
+    "synthetic": true,
+    "labels": "hand-written (see evaluation/build_booking_benchmark.py)"
+  },
+  "config": {},
+  "metrics": {
+    "cases": 103,
+    "fields_evaluated": 732,
+    "fields_correct": 722,
+    "field_accuracy": 0.9863,
+    "exact_match_accuracy": 0.9417,
+    "pet_name_accuracy": 1.0,
+    "date_accuracy": 0.9709,
+    "visits_per_day_accuracy": 1.0,
+    "service_type_accuracy": 1.0,
+    "photo_accuracy": 1.0,
+    "time_window_accuracy": 1.0,
+    "special_instructions_keyword_recall": 0.6364,
+    "missing_info_precision": 0.9375,
+    "missing_info_recall": 0.9375,
+    "missing_info_f1": 0.9375,
+    "missing_info_case_accuracy": 0.9709,
+    "invalid_range_detection": 1.0,
+    "per_field": {
+      "pet_name": {
+        "correct": 103,
+        "evaluated": 103,
+        "accuracy": 1.0
+      },
+      "start_date": {
+        "correct": 100,
+        "evaluated": 103,
+        "accuracy": 0.9709
+      },
+      "end_date": {
+        "correct": 100,
+        "evaluated": 103,
+        "accuracy": 0.9709
+      },
+      "visits_per_day": {
+        "correct": 103,
+        "evaluated": 103,
+        "accuracy": 1.0
+      },
+      "service_type": {
+        "correct": 103,
+        "evaluated": 103,
+        "accuracy": 1.0
+      },
+      "photo_updates_required": {
+        "correct": 103,
+        "evaluated": 103,
+        "accuracy": 1.0
+      },
+      "time_windows": {
+        "correct": 103,
+        "evaluated": 103,
+        "accuracy": 1.0
+      },
+      "special_instructions": {
+        "correct": 7,
+        "evaluated": 11,
+        "accuracy": 0.6364
+      }
+    },
+    "per_category": {
+      "ambiguous_dates": {
+        "cases": 12,
+        "exact_match": 0.9167,
+        "field_accuracy": 0.9762
+      },
+      "contradictory": {
+        "cases": 8,
+        "exact_match": 0.875,
+        "field_accuracy": 0.9643
+      },
+      "invalid_date_range": {
+        "cases": 9,
+        "exact_match": 1.0,
+        "field_accuracy": 1.0
+      },
+      "multiple_pets": {
+        "cases": 10,
+        "exact_match": 1.0,
+        "field_accuracy": 1.0
+      },
+      "photo_requests": {
+        "cases": 10,
+        "exact_match": 0.9,
+        "field_accuracy": 0.9859
+      },
+      "simple": {
+        "cases": 24,
+        "exact_match": 1.0,
+        "field_accuracy": 1.0
+      },
+      "special_instructions": {
+        "cases": 10,
+        "exact_match": 0.7,
+        "field_accuracy": 0.9375
+      },
+      "unsupported_services": {
+        "cases": 8,
+        "exact_match": 1.0,
+        "field_accuracy": 1.0
+      },
+      "visit_times": {
+        "cases": 12,
+        "exact_match": 1.0,
+        "field_accuracy": 1.0
+      }
+    },
+    "prediction_errors": 0
+  },
+  "errors": [],
+  "failures": [
+    {
+      "id": "ambiguous-007",
+      "category": "ambiguous_dates",
+      "diffs": {
+        "start_date": {
+          "expected": null,
+          "predicted": "2026-11-09"
+        },
+        "end_date": {
+          "expected": "2026-11-09",
+          "predicted": null
+        }
+      },
+      "expected_missing": [
+        "start_date"
+      ],
+      "predicted_missing": [
+        "end_date"
+      ]
+    },
+    {
+      "id": "special-005",
+      "category": "special_instructions",
+      "diffs": {
+        "special_instructions": {
+          "expected": [
+            "slow feeder"
+          ],
+          "predicted": null
+        }
+      },
+      "expected_missing": [],
+      "predicted_missing": []
+    },
+    {
+      "id": "special-007",
+      "category": "special_instructions",
+      "diffs": {
+        "special_instructions": {
+          "expected": [
+            "salmon",
+            "water fountain"
+          ],
+          "predicted": null
+        }
+      },
+      "expected_missing": [],
+      "predicted_missing": []
+    },
+    {
+      "id": "special-010",
+      "category": "special_instructions",
+      "diffs": {
+        "start_date": {
+          "expected": "2027-03-03",
+          "predicted": null
+        },
+        "end_date": {
+          "expected": "2027-03-06",
+          "predicted": null
+        },
+        "special_instructions": {
+          "expected": [
+            "1/3 cup",
+            "no treats"
+          ],
+          "predicted": null
+        }
+      },
+      "expected_missing": [],
+      "predicted_missing": [
+        "end_date",
+        "start_date"
+      ]
+    },
+    {
+      "id": "photo-010",
+      "category": "photo_requests",
+      "diffs": {
+        "special_instructions": {
+          "expected": [
+            "plants"
+          ],
+          "predicted": null
+        }
+      },
+      "expected_missing": [
+        "photo_updates_required"
+      ],
+      "predicted_missing": [
+        "photo_updates_required"
+      ]
+    },
+    {
+      "id": "contradictory-003",
+      "category": "contradictory",
+      "diffs": {
+        "start_date": {
+          "expected": null,
+          "predicted": "2026-11-06"
+        },
+        "end_date": {
+          "expected": null,
+          "predicted": "2026-11-09"
+        }
+      },
+      "expected_missing": [
+        "end_date",
+        "start_date"
+      ],
+      "predicted_missing": []
+    }
+  ]
+}

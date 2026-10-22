@@ -1,0 +1,381 @@
+{
+  "kind": "care_reports",
+  "system": "adversarial",
+  "created_at": "2026-10-21T03:45:05+00:00",
+  "dataset": {
+    "version": "care_report_cases_v1",
+    "size": 8,
+    "synthetic": true,
+    "labels": "hand-written per case in pawpal/agent_eval/care_reports.py"
+  },
+  "config": {
+    "generator": "adversarial",
+    "grounding_check": "pawpal.care_reports.evaluate_report (rule-based)"
+  },
+  "metrics": {
+    "cases": 8,
+    "claims_checked": 128,
+    "factual_consistency": 0.4766,
+    "unsupported_claim_rate": 0.5234,
+    "missing_activity_detection": 0.0,
+    "report_completeness": 1.0,
+    "label_agreement": 1.0,
+    "published_unsupported_claims": 0,
+    "ai_text_rejected_by_grounding_check": 8,
+    "human_correction_rate": null,
+    "human_correction_note": "Measured from real manager reviews in the KPI dashboard, not from these synthetic cases."
+  },
+  "cases": [
+    {
+      "id": "care-001",
+      "description": "Fully completed day with photos",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 0,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-002",
+      "description": "Missing feeding record (not logged)",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 1,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-003",
+      "description": "Evening visit missed",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "completed feeding at V2",
+        "completed fresh_water at V2",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "says feeding happened (V2)",
+        "says fresh_water happened (V2)",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 1,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-004",
+      "description": "Incomplete and skipped walks",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "completed feeding at V2",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM.",
+        "says feeding happened (V2)",
+        "health term 'health'",
+        "says feeding happened (day)",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 2,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-005",
+      "description": "Contradictory caregiver note",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 0,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-006",
+      "description": "Photos requested but none uploaded",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 0,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-007",
+      "description": "Checked in but never checked out",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "completed fresh_water at V1",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says fresh_water happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 1,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    },
+    {
+      "id": "care-008",
+      "description": "Photo of eating but no feeding record",
+      "narrative_source": "template_fallback",
+      "checks": {
+        "every_visit_summarised": true,
+        "completed_matches_label": true,
+        "incomplete_matches_label": true,
+        "issues_present": true,
+        "attention_flag_matches": true,
+        "photo_gaps_match": true,
+        "required_phrases": true
+      },
+      "completeness": 1.0,
+      "label_agreement": true,
+      "claims_checked": 16,
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ],
+      "expected_missing_items": 1,
+      "detected_missing_items": 0,
+      "published_unsupported_claims": []
+    }
+  ],
+  "failures": [
+    {
+      "id": "care-001",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ]
+    },
+    {
+      "id": "care-002",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'"
+      ]
+    },
+    {
+      "id": "care-003",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "completed feeding at V2",
+        "completed fresh_water at V2",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "says feeding happened (V2)"
+      ]
+    },
+    {
+      "id": "care-004",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "completed feeding at V2",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM."
+      ]
+    },
+    {
+      "id": "care-005",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ]
+    },
+    {
+      "id": "care-006",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ]
+    },
+    {
+      "id": "care-007",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "completed fresh_water at V1",
+        "photo V1-P1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says fresh_water happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'"
+      ]
+    },
+    {
+      "id": "care-008",
+      "failed_checks": [],
+      "unsupported_claims": [
+        "completed feeding at V1",
+        "observation at V1: Looks healthy and happy in the photo",
+        "health term 'healthy'",
+        "time 9:45 AM.",
+        "says feeding happened (V1)",
+        "time 9:45 AM.",
+        "health term 'health'",
+        "says dog_walking happened (day)"
+      ]
+    }
+  ]
+}

@@ -9,7 +9,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Literal
 
-Role = Literal["resident", "caregiver", "property_manager", "system"]
+Role = Literal["resident", "caregiver", "property_manager", "platform_admin", "system"]
 
 
 class AuthorizationError(Exception):
@@ -32,6 +32,10 @@ class Actor:
     @classmethod
     def manager(cls, manager_id: int) -> "Actor":
         return cls("property_manager", manager_id)
+
+    @classmethod
+    def admin(cls, admin_id: int) -> "Actor":
+        return cls("platform_admin", admin_id)
 
 
 SYSTEM = Actor("system", None)

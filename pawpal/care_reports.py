@@ -57,6 +57,11 @@ from .visit_execution import LABELS as EXEC_LABELS, get_execution
 logger = logging.getLogger(__name__)
 
 TEMPLATE_MODEL = "template-v1"
+TASKS = {ActivityType.FEEDING.value, ActivityType.FRESH_WATER.value, ActivityType.DOG_WALKING.value,
+         ActivityType.LITTER_BOX.value, ActivityType.PLAYTIME.value}
+CONTRADICTION = re.compile(
+    r"\b(did not|didn'?t|not eat(en)?|refused|untouched|wouldn'?t|couldn'?t|could not|unable|empty|skipped|no food|no water)\b",
+    re.I)
 
 
 class ReportError(Exception):
@@ -92,6 +97,7 @@ class VisitFact(BaseModel):
     duration_minutes: Optional[int] = None
     activities: list[ActivityFact] = Field(default_factory=list)
     photos: list[PhotoFact] = Field(default_factory=list)
+    photo_requested_but_missing: bool = False
 
 
 class DailyFacts(BaseModel):
@@ -169,6 +175,8 @@ def build_daily_facts(session: Session, booking_id: int, day: date) -> DailyFact
             ) for log in logs],
             photos=[PhotoFact(photo_ref=f"{ref}-P{j}", photo_id=p.id, caption=p.caption) for j, p in enumerate(photos, 1)],
         )
+        fact.photo_requested_but_missing = (booking.photo_updates_required and not fact.photos
+                                            and fact.check_out is not None)
         out_visits.append(fact)
         when = f"Visit {ref} ({fact.scheduled})"
         if status == E.MISSED:
@@ -185,6 +193,10 @@ def build_daily_facts(session: Session, booking_id: int, day: date) -> DailyFact
                 issues.append(f"{when}: {a.label} - {STATUS_LABELS[CompletionStatus(a.status)].lower()}{reason}.")
             if a.flagged:
                 issues.append(f"{when}: the caregiver flagged a {a.label.lower()} note for review.")
+            if a.activity in TASKS and a.status == CompletionStatus.COMPLETED.value and a.notes \
+                    and CONTRADICTION.search(a.notes):
+                issues.append(f"{when}: {a.label} is marked completed but the caregiver note says "
+                              f"\"{a.notes}\" - please confirm with the caregiver.")
     return DailyFacts(
         booking_id=booking.id, pet_id=pet.id, pet_name=pet.name, species=pet.species, breed=pet.breed,
         age=pet.age, report_date=day, timezone=str(tz), visits=out_visits, issues=issues,
@@ -264,6 +276,8 @@ def template_report(facts: DailyFacts) -> AICareReport:
                 text += f" Not completed: {', '.join(not_done)}."
             if v.photos:
                 text += f" {len(v.photos)} photo(s) shared."
+            elif v.photo_requested_but_missing:
+                text += " No photo was uploaded."
         summaries.append(AIVisitSummary(visit_ref=v.visit_ref, summary=text))
         for a in v.activities:
             item = AIActivity(visit_ref=v.visit_ref, activity=a.activity)
@@ -447,6 +461,7 @@ def _final_output(facts: DailyFacts, narrative: AICareReport) -> dict[str, Any]:
         "photo_references": [{"photo_ref": p.photo_ref, "photo_id": p.photo_id, "caption": p.caption}
                              for v in facts.visits for p in v.photos],
         "issues_requiring_attention": list(facts.issues),
+        "photo_gaps": [v.visit_ref for v in facts.visits if v.photo_requested_but_missing],
         "overall_summary": narrative.overall_summary,
     }
 

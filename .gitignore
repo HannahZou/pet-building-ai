@@ -12,3 +12,6 @@ venv/
 *.db-shm
 *.db.bak-*
 data/
+*.log
+.env.local
+.env.*.local

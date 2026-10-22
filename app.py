@@ -1,6 +1,7 @@
 """PawPal AI - Streamlit app.
 
 Week 1: AI booking requests. Week 2: scheduling, pricing and approvals.
+Week 3: care reporting. Week 4: analytics, AI evaluation and insights.
 Run with:  streamlit run app.py
 
 UI code lives in ``ui/``; business logic in ``pawpal/`` (no Streamlit imports there).
@@ -16,7 +17,7 @@ from pawpal.database import init_db, session_scope
 from pawpal.models import PropertyManager, Resident
 from pawpal.seed_data import seed_all
 from pawpal.workflow import list_managers
-from ui import caregiver, dashboard, manager, resident
+from ui import analytics, caregiver, dashboard, manager, resident
 from ui.common import hero
 
 st.set_page_config(page_title="PawPal AI", page_icon="🐾", layout="wide")
@@ -26,6 +27,7 @@ PORTALS = {
     "Caregiver Portal": "Your visits, hours and time off.",
     "Property Manager Portal": "Review assignments, resolve conflicts, approve bookings.",
     "Scheduling & Pricing": "Operations view across buildings.",
+    "Analytics": "Property analytics, AI evaluation and operational intelligence.",
 }
 
 init_db()  # creates the schema or upgrades a Week 1 database in place
@@ -75,5 +77,7 @@ elif portal == "Property Manager Portal":
     with session_scope() as s:
         managers = list_managers(s)
     manager.render(managers)
+elif portal == "Analytics":
+    analytics.render()
 else:
     dashboard.render(buildings)

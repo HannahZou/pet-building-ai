@@ -92,6 +92,8 @@ class Resident(Base):
     building_name: Mapped[str] = mapped_column(String(120), nullable=False)
     apartment_number: Mapped[str] = mapped_column(String(20), nullable=False)
     phone: Mapped[str | None] = mapped_column(String(40))
+    # Week 4: demo/synthetic residents (and everything they book) are kept apart in analytics.
+    is_synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=False, server_default="0")
 
     pets: Mapped[list["Pet"]] = relationship(back_populates="resident")
     bookings: Mapped[list["Booking"]] = relationship(
@@ -643,4 +645,35 @@ class AuditEvent(Base):
     actor_role: Mapped[str] = mapped_column(String(32), nullable=False)
     actor_id: Mapped[int | None] = mapped_column(Integer)
     details: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)
+
+
+
+# =========================================================== Week 4 models
+class PlatformAdmin(Base):
+    """Platform staff with explicitly granted permissions (see ``pawpal.access``)."""
+
+    __tablename__ = "platform_admins"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    full_name: Mapped[str] = mapped_column(String(120), nullable=False)
+    email: Mapped[str] = mapped_column(String(255), nullable=False, unique=True)
+    permissions: Mapped[list] = mapped_column(JSON, nullable=False, default=list, server_default="[]")
+
+
+class EvaluationRun(Base):
+    """A stored run of an AI evaluation (booking extraction or care reports)."""
+
+    __tablename__ = "evaluation_runs"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    kind: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
+    system: Mapped[str] = mapped_column(String(80), nullable=False)
+    dataset_version: Mapped[str] = mapped_column(String(80), nullable=False)
+    dataset_size: Mapped[int] = mapped_column(Integer, nullable=False)
+    metrics: Mapped[dict] = mapped_column(JSON, nullable=False)
+    failures: Mapped[list] = mapped_column(JSON, nullable=False, default=list)
+    config: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
+    is_synthetic: Mapped[bool] = mapped_column(Boolean, nullable=False, default=True)
+    notes: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False, default=_utcnow)

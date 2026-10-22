@@ -150,7 +150,7 @@ def seed_database(engine: Engine | None = None, seed: int = SEED) -> dict[str, i
         for r in data["residents"]:
             obj = s.scalar(select(Resident).where(Resident.email == r["email"]))
             if obj is None:
-                obj = Resident(**r)
+                obj = Resident(**r, is_synthetic=True)  # demo data, kept apart in analytics
                 s.add(obj)
                 created["residents"] += 1
             res_by_email[r["email"]] = obj
@@ -211,12 +211,16 @@ def seed_database(engine: Engine | None = None, seed: int = SEED) -> dict[str, i
     return created
 
 
-def seed_all(engine: Engine | None = None) -> dict[str, dict[str, int]]:
-    """Week 1 + Week 2 + Week 3 demo data (idempotent)."""
+def seed_all(engine: Engine | None = None, history: bool = True) -> dict[str, dict[str, int]]:
+    """Week 1-3 demo data plus (optionally) the Week 4 analytics history. Idempotent."""
+    from .seed_analytics import seed_analytics_history
     from .seed_care import seed_care_data
     from .seed_scheduling import seed_scheduling_data
 
-    return {"week1": seed_database(engine), "week2": seed_scheduling_data(engine), "week3": seed_care_data(engine)}
+    out = {"week1": seed_database(engine), "week2": seed_scheduling_data(engine), "week3": seed_care_data(engine)}
+    if history:
+        out["week4_history"] = seed_analytics_history(engine)
+    return out
 
 
 def reset_database(engine: Engine) -> None:
@@ -239,6 +243,7 @@ def main() -> None:
     print("Week 1 created:", result["week1"])
     print("Week 2 created:", result["week2"])
     print("Week 3 created:", result["week3"])
+    print("Week 4 analytics history created:", result["week4_history"])
 
 
 if __name__ == "__main__":

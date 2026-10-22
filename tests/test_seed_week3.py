@@ -9,8 +9,8 @@ from pawpal.seed_data import seed_all
 
 
 def test_week3_seed_covers_scenarios_and_is_idempotent(file_engine):
-    first = seed_all(file_engine)
-    second = seed_all(file_engine)
+    first = seed_all(file_engine, history=False)
+    second = seed_all(file_engine, history=False)
     assert first["week3"] == {"bookings": 4, "visits_played": 10, "reports": 6, "approved": 2, "live_demo": 1}
     assert all(v == 0 for week in second.values() for v in week.values())
     with session_scope(file_engine) as s:
